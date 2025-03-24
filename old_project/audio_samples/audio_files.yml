@@ -1,0 +1,26 @@
+channels: 1
+dataset:
+  audio_files:
+  - label: bass_samples_-_Omni_Bass_Take_8.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_8.wav
+  - label: bass_samples_-_Omni_Bass_Take_9.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_9.wav
+  - label: bass_samples_-_Omni_Bass_Take_2.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_2.wav
+  - label: bass_samples_-_Omni_Bass_Take_3.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_3.wav
+  - label: bass_samples_-_Omni_Bass_Take_1.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_1.wav
+  - label: bass_samples_-_Omni_Bass_Take_4.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_4.wav
+  - label: bass_samples_-_Omni_Bass_Take_5.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_5.wav
+  - label: bass_samples_-_Omni_Bass.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass.wav
+  - label: bass_samples_-_Omni_Bass_Take_7.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_7.wav
+  - label: bass_samples_-_Omni_Bass_Take_6.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_6.wav
+  - label: bass_samples_-_Omni_Bass_Take_10.wav
+    path: ./audio_samples/bass_samples_-_Omni_Bass_Take_10.wav
+sample_rate: 48000

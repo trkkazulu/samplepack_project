@@ -1,0 +1,9 @@
+2025-03-23 20:49:01,998 - INFO - Loading the data from X_sequenced.npy
+2025-03-23 20:49:01,999 - INFO - Splitting data into training and testing sets
+2025-03-23 20:49:02,001 - INFO - Determining input shape and latent dimension
+2025-03-23 20:49:02,001 - INFO - Shape of X_train: (184, 10, 55)
+2025-03-23 20:49:02,001 - INFO - Input Shape: (10, 55)
+2025-03-23 20:49:02,001 - INFO - Creating the VAE model
+2025-03-23 20:49:02,020 - INFO - Configuring the optimizer
+2025-03-23 20:49:02,049 - INFO - Beginning Training
+2025-03-23 20:49:03,692 - INFO - x shape: (1, 10, 55), x_decoded_mean shape: (1, 12, 55)

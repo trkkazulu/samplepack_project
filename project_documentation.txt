@@ -1,0 +1,376 @@
+# Project Title: AI Bass Sample Pack Generation
+
+## 1. Data Preparation (data_preparation.py)
+
+### Code:
+```python
+# (Paste your data_preparation.py code here)
+import librosa
+import numpy as np
+import librosa
+import numpy as np
+import pandas as pd
+import os
+
+def extract_features(y, sr):  # Modified to take audio data directly
+    """Extracts MFCCs and other features from an audio segment."""
+    try:
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)  # Reduced MFCC count for simplicity
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        zcr = librosa.feature.zero_crossing_rate(y)[0]
+
+        # Flatten the features
+        mfccs = np.mean(mfccs.T, axis=0)
+        chroma = np.mean(chroma.T, axis=0)
+        spectral_centroid = np.mean(spectral_centroid)
+        zcr = np.mean(zcr)
+
+        features = np.concatenate((mfccs, chroma, [spectral_centroid], [zcr]))
+        return features
+    except Exception as e:
+        print(f"Error extracting features: {e}")
+        return None
+
+def process_audio_file(file_path, tempo, key, scale, style, technique, segment_length=1, sr=22050):  # Added sr default
+    """Processes a single audio file, segmenting it and extracting features."""
+    try:
+        y, sr = librosa.load(file_path, sr=sr, duration=segment_length*3)  # Load with specified SR, limit to 3 sec
+        duration = librosa.get_duration(y=y, sr=sr)
+        num_segments = int(duration / segment_length)
+
+        features_list = []
+        labels_list = []
+
+        for i in range(num_segments):
+            start = i * segment_length
+            end = (i + 1) * segment_length
+            segment = y[int(start * sr):int(end * sr)]  # Segment in samples
+
+            features = extract_features(segment, sr)
+            if features is not None:
+                features_list.append(features)
+                labels_list.append([tempo, key, scale, style, technique])  # Store labels
+
+        return features_list, labels_list
+
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return [], []
+
+# Example usage (replace with your actual file paths and CSV)
+csv_file = "./metadata.csv"  # <---- UPDATE THIS PATH
+df = pd.read_csv(csv_file)
+
+all_features = []
+all_labels = []
+
+for index, row in df.iterrows():
+    file_path = row['file_path']
+    tempo = row['tempo']
+    key = row['key']
+    scale = row['scale']
+    style = row['style']
+    technique = row['technique']
+
+    features, labels = process_audio_file(file_path, tempo, key, scale, style, technique)
+
+    all_features.extend(features)
+    all_labels.extend(labels)
+
+# Convert to NumPy arrays
+X = np.array(all_features)  # Features
+y = np.array(all_labels)  # Labels
+
+print("Shape of X (Features):", X.shape)
+print("Shape of y (Labels):", y.shape)
+
+# No splitting for now
+#from sklearn.model_selection import train_test_split
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)  # Example split
+
+#print("Shape of X_train:", X_train.shape)
+#print("Shape of X_test:", X_test.shape)
+#print("Shape of y_train:", y_train.shape)
+#print("Shape of y_test:", y_test.shape)
+
+# Save the features and labels for later use
+np.save("X.npy", X)
+np.save("y.npy", y)
+
+print("Features (X) and labels (y) saved to X.npy and y.npy")
+
+#Explanation:
+#This script is responsible for loading the audio files, 
+#segmenting them, extracting features (MFCCs, chroma, etc.), 
+#and creating the training, validation, and test datasets. 
+#It also includes code for data augmentation...
+
+
+# (Paste your model.py code here)
+...
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+def create_mlp_model(input_dim, num_classes):  #input_dim = number of features
+    """Creates a simple Multi-Layer Perceptron (MLP) model."""
+    model = Sequential()
+    model.add(Dense(64, input_dim=input_dim, activation='relu'))  # First hidden layer
+    model.add(Dense(32, activation='relu'))   # Second hidden layer
+    model.add(Dense(num_classes, activation='softmax')) # Output layer. Softmax for classification
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+# (Paste your training.py code here)
+import numpy as np
+from sklearn.model_selection import train_test_split
+from model import create_mlp_model
+import pandas as pd
+
+# Load the data
+X = np.load("X.npy")
+y = np.load("y.npy")
+
+y_series = pd.Series(y[:,3])  #Column 3 is 'style'
+y_encoded = pd.get_dummies(y_series, dtype=int) # One-hot encode and convert to integer
+y_categorical = y_encoded.values #To numpy array.
+num_classes = y_encoded.shape[1] #Number of columns = number of classes
+print(y_categorical)
+
+#Split into training and testing
+X_train, X_test, y_train, y_test = train_test_split(X, y_categorical, test_size=0.2, random_state=42)
+
+# Create the model
+input_dim = X_train.shape[1]  # Number of features (34 in your case)
+model = create_mlp_model(input_dim, num_classes)
+
+# Train the model
+model.fit(X_train, y_train, epochs=50, batch_size=4, validation_data=(X_test, y_test))  # Adjust epochs/batch_size as needed
+
+# Evaluate the model
+loss, accuracy = model.evaluate(X_test, y_test)
+print(f"Test Loss: {loss:.4f}")
+print(f"Test Accuracy: {accuracy:.4f}")
+
+# Save the model
+model.save("bass_style_model.keras")  # Save the trained model
+
+#Explanation:
+#This script defines the architecture of our 
+#neural network model. We are using a simple 
+#Multi-Layer Perceptron (MLP) with two hidden layers.
+
+# (Paste your prediction.py code here)
+import librosa
+import numpy as np
+from tensorflow.keras.models import load_model
+import pandas as pd
+
+def extract_features(y, sr):  # This is identical to your data_preparation
+    """Extracts MFCCs and other features from an audio segment."""
+    try:
+        mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)  # Reduced MFCC count for simplicity
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+        spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
+        zcr = librosa.feature.zero_crossing_rate(y)[0]
+
+        # Flatten the features
+        mfccs = np.mean(mfccs.T, axis=0)
+        chroma = np.mean(chroma.T, axis=0)
+        spectral_centroid = np.mean(spectral_centroid)
+        zcr = np.mean(zcr)
+
+        features = np.concatenate((mfccs, chroma, [spectral_centroid], [zcr]))
+        return features
+    except Exception as e:
+        print(f"Error extracting features: {e}")
+        return None
+
+def prepare_new_audio(audio_path, segment_length=1, sr=22050): #Same values as data_prep
+    """Loads a new audio file, segments it, and extracts features."""
+    try:
+        y, sr = librosa.load(audio_path, sr=sr, duration=segment_length*3)  # Load with specified SR, limit to 3 sec
+        duration = librosa.get_duration(y=y, sr=sr)
+        num_segments = int(duration / segment_length)
+        features_list = []
+
+        for i in range(num_segments):
+            start = i * segment_length
+            end = (i + 1) * segment_length
+            segment = y[int(start * sr):int(end * sr)]  # Segment in samples
+
+            features = extract_features(segment, sr)
+            if features is not None:
+                features_list.append(features)
+
+        return np.array(features_list)  # Returns a NumPy array
+
+    except Exception as e:
+        print(f"Error preparing audio: {e}")
+        return None
+
+# Load the trained model
+model = load_model("bass_style_model.keras")  # Update if you saved it with .h5
+
+# Load a new audio file
+new_audio_path = "/Users/jair-rohmparkerwells/Dev/audio_samples/bass_samples_-_Omni_Bass_Take_8.wav"  # <--- UPDATE THIS PATH
+new_audio_features = prepare_new_audio(new_audio_path)
+
+if new_audio_features is not None and len(new_audio_features) > 0: #Check for data
+    # Make predictions
+    predictions = model.predict(new_audio_features)
+
+    # Get the predicted class for each segment
+    predicted_classes = np.argmax(predictions, axis=1) # Find index of max value
+    print("Predictions shape", predictions.shape)
+
+    # Convert predicted classes back to style names (if you one-hot encoded them)
+    # This assumes you have the original style names in the same order as the one-hot encoding
+    # Get the style names in the same order
+    style_names = pd.get_dummies(pd.Series(np.load("y.npy")[:,3])).columns.tolist() #Unique style names
+    predicted_styles = [style_names[i] for i in predicted_classes]  # Convert indices to names
+
+    # Print the predicted styles for each segment
+    print("Predicted Styles:")
+    for i, style in enumerate(predicted_styles):
+        print(f"Segment {i+1}: {style}")
+else:
+    print("Could not prepare the new audio for prediction.")
+# (Paste your fix_names.py code here)
+import os
+import pandas as pd
+
+def fix_names(root_dir="bass_recordings", csv_file="metadata.csv"):
+    """
+    Renames all files in the 'funk', 'jazz', 'rock', and 'space'
+    subdirectories of root_dir and updates the metadata.csv file.
+    """
+
+    subdirectories = ["funk", "jazz", "rock", "space"]
+
+    # Load the CSV file into a Pandas DataFrame
+    try:
+        df = pd.read_csv(csv_file)
+    except FileNotFoundError:
+        print(f"Error: CSV file '{csv_file}' not found.")
+        return
+
+    for subdir in subdirectories:
+        subdir_path = os.path.join(root_dir, subdir)
+
+        if not os.path.isdir(subdir_path):
+            print(f"Warning: Directory '{subdir_path}' not found.")
+            continue
+
+        files = [f for f in os.listdir(subdir_path) if os.path.isfile(os.path.join(subdir_path, f))]
+
+        for filename in files:
+            if filename.lower().endswith(".wav"):
+                old_filepath = os.path.join(subdir_path, filename)
+
+                # 1. Replace spaces with underscores in the original filename
+                new_filename_base = filename[:-4].replace(" ", "_")  # Remove .wav, replace spaces
+
+                # 2. Prefix with subdirectory name
+                new_filename = f"{subdir}_{new_filename_base}.wav"
+
+                new_filepath = os.path.join(subdir_path, new_filename)
+
+                try:
+                    os.rename(old_filepath, new_filepath)
+                    print(f"Renamed '{filename}' to '{new_filename}' in '{subdir}'")
+
+                    # **UPDATE CSV HERE**
+                    # Find the row in the DataFrame with the old file path
+                    relative_old_filepath = os.path.join(subdir, filename)  # Path relative to bass_recordings
+                    row_index = df[df['file_path'] == relative_old_filepath].index
+
+                    if len(row_index) > 0:  #Check if a row with the old name exists
+                        # Update the 'file_path' column with the new file path
+                        relative_new_filepath = os.path.join(subdir, new_filename)  # New relative path
+                        df.loc[row_index, 'file_path'] = relative_new_filepath
+                        print(f"Updated CSV: '{relative_old_filepath}' to '{relative_new_filepath}'")
+
+                    else:
+                        print(f"Warning: Could not find '{relative_old_filepath}' in CSV.")
+
+                except OSError as e:
+                    print(f"Error renaming '{filename}': {e}")
+            else:
+                print(f"Skipping non-wav file: '{filename}' in '{subdir}'")
+
+    # Save the updated DataFrame to the CSV file
+    try:
+        df.to_csv(csv_file, index=False)  # index=False to avoid writing the index column
+        print(f"Successfully updated '{csv_file}'.")
+    except Exception as e:
+        print(f"Error saving updated CSV: {e}")
+
+if __name__ == "__main__":
+    fix_names()
+
+
+
+# (Paste your generate_metadata.py code here)
+import os
+import pandas as pd
+import librosa
+
+def generate_metadata(root_dir="bass_recordings", csv_file="metadata.csv"):
+    """
+    Generates a new metadata.csv file by traversing the bass_recordings directory
+    and extracting information from each WAV file.
+    """
+
+    data = []  # List to store the metadata for each file
+    columns = ["file_path", "tempo", "key", "scale", "style", "technique", "duration"]  # Define column names
+
+    for style in os.listdir(root_dir):  # Iterate over subdirectories (funk, jazz, rock, etc.)
+        style_path = os.path.join(root_dir, style)
+
+        if not os.path.isdir(style_path):
+            continue  # Skip non-directories
+
+        for filename in os.listdir(style_path):
+            if filename.lower().endswith(".wav"):
+                file_path = os.path.join(style, filename)  # Relative path from root_dir
+
+                # **Extract Metadata from Filename (Adapt to your naming convention)**
+                # This is where you'll need to parse the filename to extract tempo, key, scale, and technique
+                # The following is just an example; modify it to match your actual filenames
+                parts = filename[:-4].split("_")  # Remove ".wav", split by underscores
+                if len(parts) >= 2:
+                    tempo = 120 #Example Value Replace with Value from the File name
+                    key = "C" #Example Value Replace with Value from the File name
+                    scale = "Major" #Example Value Replace with Value from the File name
+                    technique = "Finger Style" #Example Value Replace with Value from the File name
+                else: #Default or Error
+                    tempo = "Unknown"
+                    key = "Unknown"
+                    scale = "Unknown"
+                    technique = "Unknown"
+
+                # Extract Audio Duration
+                try:
+                    y, sr = librosa.load(os.path.join(root_dir, file_path))
+                    duration = librosa.get_duration(y=y, sr=sr)
+                except Exception as e:
+                    print(f"Error loading {file_path} for duration: {e}")
+                    duration = "Unknown"
+
+                # Add the metadata to the data list
+                data.append([file_path, tempo, key, scale, style, technique, duration])
+
+    # Create a Pandas DataFrame from the data
+    df = pd.DataFrame(data, columns=columns)
+
+    # Save the DataFrame to a CSV file
+    try:
+        df.to_csv(csv_file, index=False)
+        print(f"Successfully created '{csv_file}'.")
+    except Exception as e:
+        print(f"Error saving '{csv_file}': {e}")
+
+if __name__ == "__main__":
+    generate_metadata()
+
